@@ -1,0 +1,15 @@
+{
+  "target": "x.com",
+  "platform": null,
+  "program_handle": null,
+  "program_info": {},
+  "start_time": "2025-05-23T18:09:16.829840",
+  "workspace": "hunt_x_com_20250523_180916",
+  "findings": [],
+  "chains": [],
+  "reports": [],
+  "aggressive_mode": true,
+  "scope_validation": true,
+  "roi_score": 0,
+  "expected_earnings": 0.0
+}

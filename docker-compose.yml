@@ -1,0 +1,13 @@
+services:
+  webapp:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DISABLE_SCOPE_VALIDATION=true
+    volumes:
+      - ./data:/app/data
+      - ./hunts:/app/hunts
+      - ./src/config_override.yaml:/app/src/config_override.yaml

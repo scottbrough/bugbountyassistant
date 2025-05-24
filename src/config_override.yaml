@@ -1,0 +1,10 @@
+# Global configuration overrides
+scope_validation:
+  enabled: false
+  strict_mode: false
+  
+aggressive_testing:
+  enabled: true
+  
+# For testing without platform integration
+testing_mode: true
