@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Security Platform Revenue Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-8">
+        <h1 className="text-4xl font-bold mb-8">Revenue Streams Dashboard</h1>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Bug Bounty Revenue -->
+            <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-600">Bug Bounties</h3>
+                <p className="text-3xl font-bold mt-2">$2,450</p>
+                <p className="text-sm text-gray-500">Monthly Average</p>
+                <p className="text-red-500 text-sm">↓ Declining market</p>
+            </div>
+            
+            <!-- Enterprise Security -->
+            <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-600">Enterprise Security</h3>
+                <p className="text-3xl font-bold mt-2 text-green-600">$45,000</p>
+                <p className="text-sm text-gray-500">MRR (9 clients)</p>
+                <p className="text-green-500 text-sm">↑ 15% MoM growth</p>
+            </div>
+            
+            <!-- API Security SaaS -->
+            <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-600">API Security</h3>
+                <p className="text-3xl font-bold mt-2 text-green-600">$32,000</p>
+                <p className="text-sm text-gray-500">MRR (28 subscribers)</p>
+                <p className="text-green-500 text-sm">↑ 22% MoM growth</p>
+            </div>
+            
+            <!-- Smart Contract Audits -->
+            <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-600">Smart Contracts</h3>
+                <p className="text-3xl font-bold mt-2 text-green-600">$18,000</p>
+                <p className="text-sm text-gray-500">Monthly Revenue</p>
+                <p className="text-green-500 text-sm">↑ Growing market</p>
+            </div>
+        </div>
+        
+        <!-- Revenue Projection -->
+        <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-semibold mb-4">Revenue Projection (6 months)</h2>
+            <canvas id="revenueChart"></canvas>
+        </div>
+        
+        <!-- Customer Metrics -->
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+            <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold">Customer Acquisition Cost</h3>
+                <p className="text-2xl font-bold mt-2">$1,200</p>
+                <p className="text-sm text-gray-500">vs $24,000 LTV</p>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold">Churn Rate</h3>
+                <p className="text-2xl font-bold mt-2">5%</p>
+                <p className="text-sm text-gray-500">Monthly</p>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold">Net Revenue Retention</h3>
+                <p className="text-2xl font-bold mt-2">115%</p>
+                <p className="text-sm text-gray-500">Expansion revenue</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Revenue projection chart
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Current', 'Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6'],
+                datasets: [
+                    {
+                        label: 'Bug Bounties',
+                        data: [2450, 2400, 2350, 2300, 2250, 2200, 2150],
+                        borderColor: 'rgb(239, 68, 68)',
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Enterprise Security',
+                        data: [45000, 51750, 59512, 68439, 78705, 90511, 104087],
+                        borderColor: 'rgb(34, 197, 94)',
+                        tension: 0.1
+                    },
+                    {
+                        label: 'API Security SaaS',
+                        data: [32000, 39040, 47628, 58106, 70889, 86485, 105512],
+                        borderColor: 'rgb(59, 130, 246)',
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Smart Contracts',
+                        data: [18000, 20700, 23805, 27376, 31482, 36204, 41635],
+                        borderColor: 'rgb(168, 85, 247)',
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Monthly Recurring Revenue by Stream'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

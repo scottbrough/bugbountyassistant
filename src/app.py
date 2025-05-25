@@ -264,27 +264,7 @@ def search_programs():
 
 @app.route('/api/hunt/start', methods=['POST'])
 
-@app.route('/api/hunts/active')
-def get_active_hunts():
-    """Get all active hunts with current status"""
-    hunts = []
-    for hunt_id, progress in active_hunts.items():
-        hunts.append({
-            'id': hunt_id,
-            'target': progress.target,
-            'status': progress.status,
-            'phase': progress.phase,
-            'progress': progress.progress,
-            'current_action': progress.current_action,
-            'findings_count': len(progress.findings),
-            'duration': (datetime.now() - progress.start_time).total_seconds(),
-            'stats': {
-                'subdomains': progress.subdomains_found,
-                'endpoints': progress.endpoints_found,
-                'vulnerabilities': progress.vulnerabilities_found
-            }
-        })
-    return jsonify({'success': True, 'hunts': hunts})
+
 
 # Add authentication endpoint
 @app.route('/api/auth/add-credentials', methods=['POST'])
@@ -667,6 +647,28 @@ def handle_disconnect():
     sid = getattr(request, 'sid', None)
     logger.info(f"Client disconnected: {sid if sid else 'unknown'}")
 
+@app.route('/api/hunts/active')
+def get_active_hunts():
+    """Get all active hunts with current status"""
+    hunts = []
+    for hunt_id, progress in active_hunts.items():
+        hunts.append({
+            'id': hunt_id,
+            'target': progress.target,
+            'status': progress.status,
+            'phase': progress.phase,
+            'progress': progress.progress,
+            'current_action': progress.current_action,
+            'findings_count': len(progress.findings),
+            'duration': (datetime.now() - progress.start_time).total_seconds(),
+            'stats': {
+                'subdomains': progress.subdomains_found,
+                'endpoints': progress.endpoints_found,
+                'vulnerabilities': progress.vulnerabilities_found
+            }
+        })
+    return jsonify({'success': True, 'hunts': hunts})
+
 #!/usr/bin/env python3
 """
 Fixed run_hunt_background function for app.py
@@ -674,7 +676,7 @@ Replace the run_hunt_background function with this fixed version
 """
 
 def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, config: Dict):
-    """Enhanced hunt runner with authentication support"""
+    """Enhanced hunt runner with fixed Socket.IO context"""
     global assistant
     
     try:
@@ -682,16 +684,44 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
         progress.status = 'running'
         progress.target = target
         
-        # Suppress HTTPS warnings for this thread
-        import warnings
-        warnings.filterwarnings('ignore', message='Unverified HTTPS request')
+        # Create a custom emit function that works from background thread
+        def emit_progress(phase, progress_pct, message, **kwargs):
+            with app.app_context():
+                socketio.emit('hunt_progress', {
+                    'hunt_id': hunt_id,
+                    'phase': phase,
+                    'progress': progress_pct,
+                    'message': message,
+                    'status': progress.status,
+                    'current_action': message,
+                    'stats': {
+                        'subdomains': kwargs.get('subdomains', 0),
+                        'endpoints': kwargs.get('endpoints', 0),
+                        'vulnerabilities': kwargs.get('vulnerabilities', 0),
+                        'duration': (datetime.now() - progress.start_time).total_seconds()
+                    }
+                }, namespace='/', room=None)
+                socketio.sleep(0)  # Allow event to process
+        
+        # Create a custom log emitter
+        def emit_log(level, message):
+            with app.app_context():
+                socketio.emit('hunt_log', {
+                    'hunt_id': hunt_id,
+                    'level': level,
+                    'message': message,
+                    'timestamp': datetime.now().isoformat()
+                }, namespace='/', room=None)
+                socketio.sleep(0)
         
         # Initialize assistant
         api_key = os.environ.get('OPENAI_API_KEY')
         if not api_key:
-            progress.update('error', 0, 'OpenAI API key not configured')
+            emit_progress('error', 0, 'OpenAI API key not configured')
             progress.status = 'error'
             return
+        
+        emit_progress('initialization', 5, 'Loading configuration...')
         
         # Load configuration
         base_config = load_app_config()
@@ -702,123 +732,95 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
                 else:
                     base_config[key] = value
         
-        # Add authentication support if credentials exist
-        if hasattr(app, 'auth_session_manager'):
-            base_config['auth_session_manager'] = app.auth_session_manager
-            session_info = app.auth_session_manager.get_session_info(target)
-            if session_info['status'] == 'authenticated':
-                progress.update('initialization', 5, f'Using authenticated session for {target}')
+        emit_progress('initialization', 10, 'Initializing AI assistant...')
         
-        # Create assistant
+        # Create assistant with progress callback
         assistant = EnhancedBugBountyAssistantV3(api_key, base_config)
         
-        # Custom logging to capture detailed progress
-        class DetailedProgressHandler(logging.Handler):
-            def emit(self, record):
-                message = self.format(record)
-                
-                # Parse progress from specific log messages
-                if 'Found' in message and 'subdomains' in message:
-                    try:
-                        count = int(message.split()[1])
-                        progress.subdomains_found = count
-                    except:
-                        pass
-                elif 'endpoints' in message and 'discovered' in message:
-                    try:
-                        count = int(message.split(':')[-1].split()[0])
-                        progress.endpoints_found = count
-                    except:
-                        pass
-                elif 'Vulnerability found' in message:
-                    progress.vulnerabilities_found += 1
-                
-                # Emit log via WebSocket
-                socketio.emit('hunt_log', {
-                    'hunt_id': hunt_id,
-                    'level': record.levelname,
-                    'message': message,
-                    'timestamp': datetime.now().isoformat()
-                }, room=None, broadcast=True)
-        
-        handler = DetailedProgressHandler()
-        handler.setFormatter(logging.Formatter('%(message)s'))
-        logger.addHandler(handler)
+        # Override assistant's logging to emit via Socket.IO
+        original_log = logger.info
+        def socket_log(msg):
+            original_log(msg)
+            emit_log('INFO', msg)
+        logger.info = socket_log
         
         # Phase 1: Initialization
-        progress.update('initialization', 10, f'Starting hunt on {target}')
+        emit_progress('initialization', 15, f'Starting hunt on {target}')
         assistant.initialize_hunt(target, platform, program)
         progress.workspace = str(assistant.workspace)
+        emit_progress('initialization', 20, 'Hunt initialized')
         
         # Phase 2: AI Analysis
-        progress.update('analysis', 20, 'Analyzing target with AI...')
+        emit_progress('analysis', 25, 'Analyzing target with AI...')
         analysis = assistant.ai_target_analysis()
+        emit_progress('analysis', 30, f'Analysis complete - {len(analysis.get("priority_areas", []))} focus areas identified')
         
         # Phase 3: Reconnaissance
-        progress.update('reconnaissance', 30, 'Starting reconnaissance...')
+        emit_progress('reconnaissance', 35, 'Starting reconnaissance...')
         recon_data = assistant.intelligent_recon()
         
-        # Update progress with recon results
-        progress.update('reconnaissance', 50, 
-                       f'Found {len(recon_data.get("subdomains", []))} subdomains, '
-                       f'{len(recon_data.get("endpoints", []))} endpoints',
-                       subdomains=len(recon_data.get("subdomains", [])),
-                       endpoints=len(recon_data.get("endpoints", [])))
+        subdomains_count = len(recon_data.get('subdomains', []))
+        endpoints_count = len(recon_data.get('endpoints', []))
+        
+        emit_progress('reconnaissance', 50, 
+                     f'Recon complete - {subdomains_count} subdomains, {endpoints_count} endpoints',
+                     subdomains=subdomains_count,
+                     endpoints=endpoints_count)
         
         # Phase 4: Vulnerability Hunting
-        progress.update('vulnerability_hunting', 60, 'Hunting for vulnerabilities...')
+        emit_progress('vulnerability_hunting', 55, 'Starting vulnerability detection...')
         findings = assistant.ai_vulnerability_hunting(recon_data)
         progress.findings = findings
         
-        # Update with findings
-        progress.update('vulnerability_hunting', 75,
-                       f'Found {len(findings)} potential vulnerabilities',
-                       vulnerabilities=len(findings))
+        emit_progress('vulnerability_hunting', 75,
+                     f'Found {len(findings)} potential vulnerabilities',
+                     vulnerabilities=len(findings))
         
         # Phase 5: Chain Detection
-        progress.update('chain_analysis', 80, 'Analyzing vulnerability chains...')
+        emit_progress('chain_analysis', 80, 'Analyzing attack chains...')
         chains = assistant.ai_chain_detection()
+        emit_progress('chain_analysis', 85, f'Identified {len(chains)} attack chains')
         
         # Phase 6: Report Generation
-        progress.update('reporting', 90, 'Generating reports...')
+        emit_progress('reporting', 90, 'Generating reports...')
         revenue_report = assistant.generate_revenue_report()
+        emit_progress('reporting', 95, 'Reports generated')
         
         # Phase 7: Complete
-        progress.update('complete', 100, 'Hunt completed successfully!')
+        emit_progress('complete', 100, 'Hunt completed successfully!')
         progress.status = 'completed'
         
-        # Remove handler
-        logger.removeHandler(handler)
-        
-        # Emit completion with summary
-        socketio.emit('hunt_complete', {
-            'hunt_id': hunt_id,
-            'target': target,
-            'findings_count': len(findings),
-            'chains_count': len(chains),
-            'workspace': progress.workspace,
-            'summary': {
-                'subdomains': progress.subdomains_found,
-                'endpoints': progress.endpoints_found,
-                'vulnerabilities': progress.vulnerabilities_found,
-                'duration': (datetime.now() - progress.start_time).total_seconds()
-            }
-        }, room=None, broadcast=True)
+        # Emit completion event
+        with app.app_context():
+            socketio.emit('hunt_complete', {
+                'hunt_id': hunt_id,
+                'target': target,
+                'findings_count': len(findings),
+                'chains_count': len(chains),
+                'workspace': progress.workspace,
+                'summary': {
+                    'subdomains': subdomains_count,
+                    'endpoints': endpoints_count,
+                    'vulnerabilities': len(findings),
+                    'duration': (datetime.now() - progress.start_time).total_seconds()
+                }
+            }, namespace='/', room=None)
         
     except Exception as e:
         progress = active_hunts.get(hunt_id)
         if progress:
-            progress.update('error', progress.progress, f'Error: {str(e)}')
+            emit_progress('error', progress.progress, f'Error: {str(e)}')
             progress.status = 'error'
         
         logger.error(f"Hunt {hunt_id} failed: {e}")
         logger.exception("Full traceback:")
         
-        socketio.emit('hunt_error', {
-            'hunt_id': hunt_id,
-            'error': str(e),
-            'phase': progress.phase if progress else 'unknown'
-        }, room=None, broadcast=True)
+        with app.app_context():
+            socketio.emit('hunt_error', {
+                'hunt_id': hunt_id,
+                'error': str(e),
+                'phase': progress.phase if progress else 'unknown'
+            }, namespace='/', room=None)
 
 # Initialize and run
 

@@ -33,6 +33,7 @@
 <body class="bg-gray-50">
     <div id="root"></div>
 
+    {% raw %}
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
 
@@ -303,51 +304,234 @@
         }
 
         // Hunt Manager Component
-        function HuntManager({ addNotification }) {
-            const [activeHunts, setActiveHunts] = useState([]);
-            const [showNewHunt, setShowNewHunt] = useState(false);
+        // Hunt Manager Component with Fixed Live Updates
+function HuntManager({ addNotification }) {
+    const [activeHunts, setActiveHunts] = useState([]);
+    const [showNewHunt, setShowNewHunt] = useState(false);
+    const [huntLogs, setHuntLogs] = useState({});
 
-            return (
-                <div>
-                    <div className="flex justify-between items-center mb-8">
-                        <h1 className="text-3xl font-bold">Hunt Manager</h1>
-                        <button
-                            onClick={() => setShowNewHunt(true)}
-                            className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
-                        >
-                            <i className="fas fa-plus"></i>
-                            <span>New Hunt</span>
-                        </button>
+    useEffect(() => {
+        // Fetch active hunts periodically
+        const fetchActiveHunts = async () => {
+            try {
+                const response = await fetch(`${API_BASE}/hunts/active`);
+                const data = await response.json();
+                if (data.success) {
+                    setActiveHunts(data.hunts);
+                }
+            } catch (error) {
+                console.error('Failed to fetch hunts:', error);
+            }
+        };
+
+        fetchActiveHunts();
+        const interval = setInterval(fetchActiveHunts, 2000); // Poll every 2 seconds
+
+        // Socket listeners for real-time updates
+        socket.on('hunt_progress', (data) => {
+            console.log('Progress update:', data);
+            setActiveHunts(prev => prev.map(hunt => 
+                hunt.id === data.hunt_id 
+                    ? { ...hunt, ...data }
+                    : hunt
+            ));
+        });
+
+        socket.on('hunt_log', (data) => {
+            setHuntLogs(prev => ({
+                ...prev,
+                [data.hunt_id]: [...(prev[data.hunt_id] || []).slice(-50), data]
+            }));
+        });
+
+        socket.on('hunt_complete', (data) => {
+            addNotification('success', 
+                `Hunt completed! Found ${data.findings_count} vulnerabilities on ${data.target}`
+            );
+            fetchActiveHunts();
+        });
+
+        socket.on('hunt_error', (data) => {
+            addNotification('error', `Hunt failed: ${data.error}`);
+            fetchActiveHunts();
+        });
+
+        return () => {
+            clearInterval(interval);
+            socket.off('hunt_progress');
+            socket.off('hunt_log');
+            socket.off('hunt_complete');
+            socket.off('hunt_error');
+        };
+    }, [addNotification]);
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-8">
+                <h1 className="text-3xl font-bold">Hunt Manager</h1>
+                <button
+                    onClick={() => setShowNewHunt(true)}
+                    className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+                >
+                    <i className="fas fa-plus"></i>
+                    <span>New Hunt</span>
+                </button>
+            </div>
+
+            {showNewHunt && (
+                <NewHuntModal
+                    onClose={() => setShowNewHunt(false)}
+                    onStart={(huntData) => {
+                        setShowNewHunt(false);
+                        startNewHunt(huntData, addNotification);
+                    }}
+                />
+            )}
+
+            {/* Active Hunts */}
+            <div className="space-y-4">
+                {activeHunts.length === 0 ? (
+                    <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                        <i className="fas fa-crosshairs text-6xl text-gray-300 mb-4"></i>
+                        <p className="text-gray-500 text-lg">No active hunts</p>
+                        <p className="text-gray-400">Start a new hunt to begin testing targets</p>
                     </div>
-
-                    {showNewHunt && (
-                        <NewHuntModal
-                            onClose={() => setShowNewHunt(false)}
-                            onStart={(huntData) => {
-                                setShowNewHunt(false);
-                                startNewHunt(huntData, addNotification);
-                            }}
+                ) : (
+                    activeHunts.map(hunt => (
+                        <HuntCard 
+                            key={hunt.id} 
+                            hunt={hunt} 
+                            logs={huntLogs[hunt.id] || []}
                         />
-                    )}
+                    ))
+                )}
+            </div>
+        </div>
+    );
+}
 
-                    {/* Active Hunts */}
-                    <div className="space-y-4">
-                        {activeHunts.length === 0 ? (
-                            <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                                <i className="fas fa-crosshairs text-6xl text-gray-300 mb-4"></i>
-                                <p className="text-gray-500 text-lg">No active hunts</p>
-                                <p className="text-gray-400">Start a new hunt to begin testing targets</p>
-                            </div>
+// Updated Hunt Card with Live Updates
+function HuntCard({ hunt, logs }) {
+    const [expanded, setExpanded] = useState(false);
+    
+    const getPhaseColor = (phase) => {
+        const colors = {
+            'initialization': 'bg-blue-600',
+            'analysis': 'bg-purple-600',
+            'reconnaissance': 'bg-indigo-600',
+            'vulnerability_hunting': 'bg-red-600',
+            'chain_analysis': 'bg-orange-600',
+            'reporting': 'bg-green-600',
+            'complete': 'bg-green-600',
+            'error': 'bg-red-600'
+        };
+        return colors[phase] || 'bg-gray-600';
+    };
+
+    return (
+        <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <h3 className="text-xl font-semibold">{hunt.target}</h3>
+                    <p className="text-gray-500 text-sm">{hunt.current_action}</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <span className={`px-3 py-1 rounded-full text-sm ${
+                        hunt.status === 'running' ? 'bg-green-100 text-green-800 animate-pulse' :
+                        hunt.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                        hunt.status === 'error' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                    }`}>
+                        {hunt.status}
+                    </span>
+                    <button
+                        onClick={() => setExpanded(!expanded)}
+                        className="text-gray-500 hover:text-gray-700"
+                    >
+                        <i className={`fas fa-chevron-${expanded ? 'up' : 'down'}`}></i>
+                    </button>
+                </div>
+            </div>
+
+            {/* Enhanced Progress Bar */}
+            <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-1">
+                    <span className="capitalize">{hunt.phase?.replace('_', ' ')}</span>
+                    <span>{hunt.progress}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div
+                        className={`h-3 transition-all duration-500 ${getPhaseColor(hunt.phase)}`}
+                        style={{ width: `${hunt.progress}%` }}
+                        >
+                        <div className="h-full bg-white bg-opacity-25 animate-pulse"></div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Live Stats */}
+            <div className="grid grid-cols-3 gap-4 text-center mb-4">
+                <div className="bg-blue-50 rounded p-3">
+                    <p className="text-2xl font-semibold text-blue-600 animate-pulse">
+                        {hunt.stats?.subdomains || 0}
+                    </p>
+                    <p className="text-xs text-gray-500">Subdomains</p>
+                </div>
+                <div className="bg-purple-50 rounded p-3">
+                    <p className="text-2xl font-semibold text-purple-600 animate-pulse">
+                        {hunt.stats?.endpoints || 0}
+                    </p>
+                    <p className="text-xs text-gray-500">Endpoints</p>
+                </div>
+                <div className="bg-red-50 rounded p-3">
+                    <p className="text-2xl font-semibold text-red-600 animate-pulse">
+                        {hunt.stats?.vulnerabilities || 0}
+                    </p>
+                    <p className="text-xs text-gray-500">Findings</p>
+                </div>
+            </div>
+
+            {/* Expanded View with Live Logs */}
+            {expanded && (
+                <div className="mt-6 pt-6 border-t">
+                    <h4 className="font-semibold mb-3">Live Activity Feed</h4>
+                    <div className="bg-gray-900 text-gray-100 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-xs">
+                        {logs.length === 0 ? (
+                            <p className="text-gray-500">Waiting for activity...</p>
                         ) : (
-                            activeHunts.map(hunt => (
-                                <HuntCard key={hunt.id} hunt={hunt} />
+                            logs.map((log, index) => (
+                                <div key={index} className="mb-1 animate-fade-in">
+                                    <span className="text-gray-500">
+                                        {new Date(log.timestamp).toLocaleTimeString()}
+                                    </span>
+                                    <span className={`ml-2 ${
+                                        log.level === 'ERROR' ? 'text-red-400' :
+                                        log.level === 'WARNING' ? 'text-yellow-400' :
+                                        'text-green-400'
+                                    }`}>
+                                        [{log.level}]
+                                    </span>
+                                    <span className="ml-2 text-gray-200">{log.message}</span>
+                                </div>
                             ))
                         )}
                     </div>
+                    
+                    <div className="flex space-x-3 mt-4">
+                        <button className="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            <i className="fas fa-download mr-2"></i>
+                            Download Reports
+                        </button>
+                        <button className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors">
+                            <i className="fas fa-folder-open mr-2"></i>
+                            View Workspace
+                        </button>
+                    </div>
                 </div>
-            );
-        }
-
+            )}
+        </div>
+    );
+}
         // New Hunt Modal Component
         function NewHuntModal({ onClose, onStart }) {
             const [target, setTarget] = useState('');
@@ -487,268 +671,6 @@
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            );
-        }
-
-        // Hunt Card Component
-        function HuntCard({ hunt }) {
-            const [expanded, setExpanded] = useState(false);
-            const [progress, setProgress] = useState(hunt.progress || 0);
-            const [logs, setLogs] = useState([]);
-
-            useEffect(() => {
-                // Listen for progress updates
-                socket.on('hunt_progress', (data) => {
-                    if (data.hunt_id === hunt.id) {
-                        setProgress(data.progress);
-                    }
-                });
-
-                socket.on('hunt_log', (data) => {
-                    if (data.hunt_id === hunt.id) {
-                        setLogs(prev => [...prev, data].slice(-10));
-                    }
-                });
-
-                return () => {
-                    socket.off('hunt_progress');
-                    socket.off('hunt_log');
-                };
-            }, [hunt.id]);
-
-            return (
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 className="text-xl font-semibold">{hunt.target}</h3>
-                            <p className="text-gray-500">
-                                {hunt.platform && `${hunt.platform} - ${hunt.program}`}
-                            </p>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <span className={`px-3 py-1 rounded-full text-sm ${
-                                hunt.status === 'running' ? 'bg-green-100 text-green-800' :
-                                hunt.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                                'bg-gray-100 text-gray-800'
-                            }`}>
-                                {hunt.status}
-                            </span>
-                            <button
-                                onClick={() => setExpanded(!expanded)}
-                                className="text-gray-500 hover:text-gray-700"
-                            >
-                                <i className={`fas fa-chevron-${expanded ? 'up' : 'down'}`}></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="mb-4">
-                        <div className="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>{hunt.phase || 'Initializing'}</span>
-                            <span>{progress}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                                className="bg-purple-600 h-2 rounded-full hunt-progress"
-                                style="width: {{ progress }}%;"
-                            ></div>
-                        </div>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                        <div>
-                            <p className="text-2xl font-semibold">{hunt.findings_count || 0}</p>
-                            <p className="text-sm text-gray-500">Findings</p>
-                        </div>
-                        <div>
-                            <p className="text-2xl font-semibold">{hunt.chains_count || 0}</p>
-                            <p className="text-sm text-gray-500">Chains</p>
-                        </div>
-                        <div>
-                            <p className="text-2xl font-semibold">{hunt.duration || '0'}m</p>
-                            <p className="text-sm text-gray-500">Duration</p>
-                        </div>
-                    </div>
-
-                    {/* Expanded View */}
-                    {expanded && (
-                        <div className="mt-6 pt-6 border-t">
-                            <h4 className="font-semibold mb-3">Activity Log</h4>
-                            <div className="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                                {logs.map((log, index) => (
-                                    <div key={index} className="text-sm mb-2">
-                                        <span className="text-gray-500">{new Date(log.timestamp).toLocaleTimeString()}</span>
-                                        <span className={`ml-2 ${
-                                            log.level === 'ERROR' ? 'text-red-600' :
-                                            log.level === 'WARNING' ? 'text-yellow-600' :
-                                            'text-gray-700'
-                                        }`}>
-                                            {log.message}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                            
-                            <div className="flex space-x-3 mt-4">
-                                <button className="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors">
-                                    <i className="fas fa-download mr-2"></i>
-                                    Download Reports
-                                </button>
-                                <button className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors">
-                                    <i className="fas fa-folder-open mr-2"></i>
-                                    View Workspace
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
-        // Findings View Component
-        function FindingsView() {
-            const [findings, setFindings] = useState([]);
-            const [filters, setFilters] = useState({
-                severity: '',
-                type: '',
-                days: 30
-            });
-
-            useEffect(() => {
-                fetchFindings();
-            }, [filters]);
-
-            const fetchFindings = async () => {
-                const params = new URLSearchParams(filters);
-                const response = await fetch(`${API_BASE}/findings?${params}`);
-                const data = await response.json();
-                if (data.success) {
-                    setFindings(data.findings);
-                }
-            };
-
-            return (
-                <div>
-                    <h1 className="text-3xl font-bold mb-8">Findings</h1>
-                    
-                    {/* Filters */}
-                    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <select
-                                value={filters.severity}
-                                onChange={(e) => setFilters({...filters, severity: e.target.value})}
-                                className="px-4 py-2 border rounded-lg"
-                            >
-                                <option value="">All Severities</option>
-                                <option value="critical">Critical</option>
-                                <option value="high">High</option>
-                                <option value="medium">Medium</option>
-                                <option value="low">Low</option>
-                            </select>
-                            
-                            <select
-                                value={filters.type}
-                                onChange={(e) => setFilters({...filters, type: e.target.value})}
-                                className="px-4 py-2 border rounded-lg"
-                            >
-                                <option value="">All Types</option>
-                                <option value="XSS">XSS</option>
-                                <option value="SQL Injection">SQL Injection</option>
-                                <option value="SSRF">SSRF</option>
-                                <option value="IDOR">IDOR</option>
-                                <option value="RCE">RCE</option>
-                            </select>
-                            
-                            <select
-                                value={filters.days}
-                                onChange={(e) => setFilters({...filters, days: e.target.value})}
-                                className="px-4 py-2 border rounded-lg"
-                            >
-                                <option value="7">Last 7 days</option>
-                                <option value="30">Last 30 days</option>
-                                <option value="90">Last 90 days</option>
-                                <option value="365">Last year</option>
-                            </select>
-                            
-                            <button
-                                onClick={fetchFindings}
-                                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
-                            >
-                                <i className="fas fa-search mr-2"></i>
-                                Search
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Findings Table */}
-                    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-                        <table className="w-full">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Type
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Severity
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Program
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Amount
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Status
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Date
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {findings.map((finding) => (
-                                    <tr key={finding.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="text-sm font-medium text-gray-900">
-                                                {finding.type}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                finding.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                                                finding.severity === 'high' ? 'bg-orange-100 text-orange-800' :
-                                                finding.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                                                'bg-green-100 text-green-800'
-                                            }`}>
-                                                {finding.severity}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {finding.program}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            ${finding.amount}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                finding.status === 'paid' ? 'bg-green-100 text-green-800' :
-                                                finding.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
-                                                'bg-gray-100 text-gray-800'
-                                            }`}>
-                                                {finding.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {new Date(finding.date).toLocaleDateString()}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             );
@@ -1316,5 +1238,6 @@
         // Render the app
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
+    {% endraw %}
 </body>
 </html>
