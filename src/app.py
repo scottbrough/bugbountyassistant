@@ -362,6 +362,8 @@ def get_findings():
         vuln_type = request.args.get('type')
         days = int(request.args.get('days', 30))
         
+        revenue_maximizer._init_database()
+        
         conn = sqlite3.connect(revenue_maximizer.db_path)
         cursor = conn.cursor()
         
@@ -385,14 +387,14 @@ def get_findings():
         for row in cursor.fetchall():
             findings.append({
                 'id': row[0],
-                'platform': row[1],
-                'program': row[2],
-                'type': row[3],
-                'severity': row[4],
-                'amount': row[5],
-                'status': row[9],
-                'date': row[7],
-                'duplicate': bool(row[12])
+                'platform': row[1] if len(row) > 1 else 'Unknown',
+                'program': row[2] if len(row) > 2 else 'Unknown',
+                'type': row[3] if len(row) > 3 else 'Unknown',
+                'severity': row[4] if len(row) > 4 else 'Unknown',
+                'amount': row[5] if len(row) > 5 else 0,
+                'status': row[9] if len(row) > 9 else 'unknown',
+                'date': row[7] if len(row) > 7 else None,
+                'duplicate': bool(row[12]) if len(row) > 12 else False
             })
         
         conn.close()
@@ -404,7 +406,13 @@ def get_findings():
         })
         
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        logger.error(f"Error fetching findings: {str(e)}")
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'findings': [],
+            'total': 0
+        })
 
 @app.route('/api/reports/<hunt_id>')
 def get_reports(hunt_id):
@@ -711,28 +719,47 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
                 }, namespace='/')
                 socketio.sleep(0)
         
-        # Initialize assistant
-        api_key = os.environ.get('OPENAI_API_KEY')
-        if not api_key:
-            emit_progress('error', 0, 'OpenAI API key not configured')
+        try:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                # Try to load from .envrc if direnv isn't working
+                try:
+                    with open('.envrc', 'r') as f:
+                        for line in f:
+                            if line.startswith('OPENAI_API_KEY='):
+                                api_key = line.split('=', 1)[1].strip()
+                                break
+                except:
+                    pass
+            
+            if not api_key:
+                raise ValueError("OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.")
+            
+            emit_progress('initialization', 5, 'Loading configuration...')
+            
+            # Load configuration
+            base_config = load_app_config()
+            if config:
+                for key, value in config.items():
+                    if isinstance(value, dict) and key in base_config:
+                        base_config[key].update(value)
+                    else:
+                        base_config[key] = value
+            
+            emit_progress('initialization', 10, 'Initializing AI assistant...')
+            
+            # Create assistant with progress callback
+            assistant = EnhancedBugBountyAssistantV3(api_key, base_config)
+        except Exception as e:
+            logger.error(f"Failed to initialize assistant: {str(e)}")
+            emit_progress('error', 0, f'Configuration error: {str(e)}')
             progress.status = 'error'
+            socketio.emit('hunt_error', {
+                'hunt_id': hunt_id,
+                'error': f'Configuration error: {str(e)}',
+                'phase': 'initialization'
+            }, namespace='/')
             return
-        
-        emit_progress('initialization', 5, 'Loading configuration...')
-        
-        # Load configuration
-        base_config = load_app_config()
-        if config:
-            for key, value in config.items():
-                if isinstance(value, dict) and key in base_config:
-                    base_config[key].update(value)
-                else:
-                    base_config[key] = value
-        
-        emit_progress('initialization', 10, 'Initializing AI assistant...')
-        
-        # Create assistant with progress callback
-        assistant = EnhancedBugBountyAssistantV3(api_key, base_config)
         
         def log_with_socket(msg):
             logger.info(msg)
