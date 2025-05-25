@@ -749,9 +749,11 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
             if 'openai' not in base_config:
                 base_config['openai'] = {}
             
-            base_config['openai']['max_tokens_per_request'] = 4000
+            base_config['openai']['max_tokens_per_request'] = 2000  # Reduced from 4000
             base_config['openai']['chunk_large_inputs'] = True
-            base_config['openai']['model'] = 'gpt-3.5-turbo' # Fallback to 3.5 if 4 hits rate limits
+            base_config['openai']['model'] = 'gpt-3.5-turbo'  # Default to 3.5 for better rate limits
+            base_config['openai']['batch_size'] = 50  # Add batch size control
+            base_config['openai']['rate_limit_delay'] = 2  # Add delay between batches
             
             emit_progress('initialization', 10, 'Initializing AI assistant...')
             
@@ -797,7 +799,8 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
         emit_progress('reconnaissance', 50, 
                      f'Recon complete - {subdomains_count} subdomains, {endpoints_count} endpoints',
                      subdomains=subdomains_count,
-                     endpoints=endpoints_count)
+                     endpoints=endpoints_count,
+                     classified_endpoints=recon_data.get('classified_endpoints', []))
         
         # Phase 4: Vulnerability Hunting
         emit_progress('vulnerability_hunting', 55, 'Starting vulnerability detection...')
