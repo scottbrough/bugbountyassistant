@@ -329,11 +329,19 @@ function HuntManager({ addNotification }) {
         // Socket listeners for real-time updates
         socket.on('hunt_progress', (data) => {
             console.log('Progress update:', data);
-            setActiveHunts(prev => prev.map(hunt => 
-                hunt.id === data.hunt_id 
-                    ? { ...hunt, ...data }
-                    : hunt
-            ));
+            setActiveHunts(prev => prev.map(hunt => {
+                if (hunt.id === data.hunt_id) {
+                    return { 
+                        ...hunt, 
+                        ...data,
+                        stats: {
+                            ...hunt.stats,
+                            ...data.stats
+                        }
+                    };
+                }
+                return hunt;
+            }));
         });
 
         socket.on('hunt_log', (data) => {
