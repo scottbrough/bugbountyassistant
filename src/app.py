@@ -263,37 +263,6 @@ def search_programs():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/hunt/start', methods=['POST'])
-
-
-
-# Add authentication endpoint
-@app.route('/api/auth/add-credentials', methods=['POST'])
-def add_credentials():
-    """Add authentication credentials for a target"""
-    try:
-        data = request.json
-        target = data.get('target')
-        username = data.get('username')
-        password = data.get('password')
-        login_url = data.get('login_url')
-        
-        if not all([target, username, password]):
-            return jsonify({'success': False, 'error': 'Missing required fields'})
-        
-        # Initialize auth manager if needed
-        if not hasattr(app, 'auth_session_manager'):
-            from auth_session_manager import AuthSessionManager
-            app.auth_session_manager = AuthSessionManager()
-        
-        app.auth_session_manager.add_credentials(target, username, password, login_url)
-        
-        return jsonify({
-            'success': True,
-            'message': f'Credentials added for {target}'
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
 def start_hunt():
     """Start a new bug bounty hunt"""
     try:
@@ -327,6 +296,34 @@ def start_hunt():
             'message': f'Hunt started for {target}'
         })
         
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# Add authentication endpoint
+@app.route('/api/auth/add-credentials', methods=['POST'])
+def add_credentials():
+    """Add authentication credentials for a target"""
+    try:
+        data = request.json
+        target = data.get('target')
+        username = data.get('username')
+        password = data.get('password')
+        login_url = data.get('login_url')
+        
+        if not all([target, username, password]):
+            return jsonify({'success': False, 'error': 'Missing required fields'})
+        
+        # Initialize auth manager if needed
+        if not hasattr(app, 'auth_session_manager'):
+            from auth_session_manager import AuthSessionManager
+            app.auth_session_manager = AuthSessionManager()
+        
+        app.auth_session_manager.add_credentials(target, username, password, login_url)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Credentials added for {target}'
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
