@@ -554,7 +554,7 @@ function HuntCard({ hunt, logs }) {
                             <div className="space-y-4">
                                 {['high', 'medium', 'low'].map(level => {
                                     const endpoints = hunt.classified_endpoints.filter(ep => ep.interest_level === level);
-                                    if (endpoints.length === 0) return null;
+                                    if (endpoints.length === 0) return <React.Fragment key={level}></React.Fragment>;
                                     
                                     return (
                                         <div key={level} className="bg-gray-50 rounded-lg p-4">
@@ -583,119 +583,6 @@ function HuntCard({ hunt, logs }) {
                                                     <div className="text-center text-gray-500 text-sm">
                                                         ... and {endpoints.length - 5} more
                                                     </div>
-        // Authentication Modal Component
-        function AuthModal({ target, onClose, onSave }) {
-            const [credentials, setCredentials] = useState({
-                username: '',
-                password: '',
-                loginUrl: ''
-            });
-            const [saving, setSaving] = useState(false);
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                if (!credentials.username || !credentials.password) {
-                    alert('Please enter both username and password');
-                    return;
-                }
-
-                setSaving(true);
-                try {
-                    const response = await fetch('/api/auth/add-credentials', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            target: target,
-                            username: credentials.username,
-                            password: credentials.password,
-                            login_url: credentials.loginUrl || `https://${target}/login`
-                        })
-                    });
-
-                    const data = await response.json();
-                    if (data.success) {
-                        onSave(data.message);
-                        onClose();
-                    } else {
-                        alert(data.error || 'Failed to save credentials');
-                    }
-                } catch (error) {
-                    alert('Failed to save credentials');
-                    console.error('Auth error:', error);
-                } finally {
-                    setSaving(false);
-                }
-            };
-
-            return (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
-                        <h2 className="text-2xl font-bold mb-6">Add Authentication</h2>
-                        <p className="text-gray-600 mb-4">Enter credentials for {target}</p>
-                        
-                        <form onSubmit={handleSubmit}>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Username/Email
-                                </label>
-                                <input
-                                    type="text"
-                                    value={credentials.username}
-                                    onChange={(e) => setCredentials({...credentials, username: e.target.value})}
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                    required
-                                />
-                            </div>
-
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Password
-                                </label>
-                                <input
-                                    type="password"
-                                    value={credentials.password}
-                                    onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                    required
-                                />
-                            </div>
-
-                            <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Login URL (Optional)
-                                </label>
-                                <input
-                                    type="url"
-                                    value={credentials.loginUrl}
-                                    onChange={(e) => setCredentials({...credentials, loginUrl: e.target.value})}
-                                    placeholder={`https://${target}/login`}
-                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                />
-                            </div>
-
-                            <div className="flex space-x-4">
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    className="flex-1 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-                                >
-                                    <i className="fas fa-key mr-2"></i>
-                                    {saving ? 'Saving...' : 'Save Credentials'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={onClose}
-                                    className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            );
-        }
-
                                                 )}
                                             </div>
                                         </div>
@@ -715,6 +602,119 @@ function HuntCard({ hunt, logs }) {
                     onSave={handleAuthSave}
                 />
             )}
+        </div>
+    );
+}
+
+// Authentication Modal Component
+function AuthModal({ target, onClose, onSave }) {
+    const [credentials, setCredentials] = useState({
+        username: '',
+        password: '',
+        loginUrl: ''
+    });
+    const [saving, setSaving] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!credentials.username || !credentials.password) {
+            alert('Please enter both username and password');
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const response = await fetch('/api/auth/add-credentials', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    target: target,
+                    username: credentials.username,
+                    password: credentials.password,
+                    login_url: credentials.loginUrl || `https://${target}/login`
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                onSave(data.message);
+                onClose();
+            } else {
+                alert(data.error || 'Failed to save credentials');
+            }
+        } catch (error) {
+            alert('Failed to save credentials');
+            console.error('Auth error:', error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
+                <h2 className="text-2xl font-bold mb-6">Add Authentication</h2>
+                <p className="text-gray-600 mb-4">Enter credentials for {target}</p>
+                
+                <form onSubmit={handleSubmit}>
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Username/Email
+                        </label>
+                        <input
+                            type="text"
+                            value={credentials.username}
+                            onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            required
+                        />
+                    </div>
+
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Password
+                        </label>
+                        <input
+                            type="password"
+                            value={credentials.password}
+                            onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            required
+                        />
+                    </div>
+
+                    <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Login URL (Optional)
+                        </label>
+                        <input
+                            type="url"
+                            value={credentials.loginUrl}
+                            onChange={(e) => setCredentials({...credentials, loginUrl: e.target.value})}
+                            placeholder={`https://${target}/login`}
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                    </div>
+
+                    <div className="flex space-x-4">
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            className="flex-1 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                        >
+                            <i className="fas fa-key mr-2"></i>
+                            {saving ? 'Saving...' : 'Save Credentials'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg hover:bg-gray-300 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 }
