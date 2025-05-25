@@ -799,7 +799,8 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
         emit_progress('reconnaissance', 50, 
                      f'Recon complete - {subdomains_count} subdomains, {endpoints_count} endpoints',
                      subdomains=subdomains_count,
-                     endpoints=endpoints_count)
+                     endpoints=endpoints_count,
+                     classified_endpoints=recon_data.get('classified_endpoints', []))
         
         # Phase 4: Vulnerability Hunting
         emit_progress('vulnerability_hunting', 55, 'Starting vulnerability detection...')
