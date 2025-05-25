@@ -746,6 +746,13 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
                     else:
                         base_config[key] = value
             
+            if 'openai' not in base_config:
+                base_config['openai'] = {}
+            
+            base_config['openai']['max_tokens_per_request'] = 4000
+            base_config['openai']['chunk_large_inputs'] = True
+            base_config['openai']['model'] = 'gpt-3.5-turbo' # Fallback to 3.5 if 4 hits rate limits
+            
             emit_progress('initialization', 10, 'Initializing AI assistant...')
             
             # Create assistant with progress callback
