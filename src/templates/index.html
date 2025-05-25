@@ -324,8 +324,7 @@ function HuntManager({ addNotification }) {
             }
         };
 
-        fetchActiveHunts();
-        const interval = setInterval(fetchActiveHunts, 2000); // Poll every 2 seconds
+        fetchActiveHunts(); // Initial fetch only
 
         // Socket listeners for real-time updates
         socket.on('hunt_progress', (data) => {
@@ -357,7 +356,6 @@ function HuntManager({ addNotification }) {
         });
 
         return () => {
-            clearInterval(interval);
             socket.off('hunt_progress');
             socket.off('hunt_log');
             socket.off('hunt_complete');
@@ -464,7 +462,7 @@ function HuntCard({ hunt, logs }) {
                         className={`h-3 transition-all duration-500 ${getPhaseColor(hunt.phase)}`}
                         style={{ width: `${hunt.progress}%` }}
                         >
-                        <div className="h-full bg-white bg-opacity-25 animate-pulse"></div>
+                        <div className="h-full bg-white bg-opacity-25"></div>
                     </div>
                 </div>
             </div>
@@ -472,19 +470,19 @@ function HuntCard({ hunt, logs }) {
             {/* Live Stats */}
             <div className="grid grid-cols-3 gap-4 text-center mb-4">
                 <div className="bg-blue-50 rounded p-3">
-                    <p className="text-2xl font-semibold text-blue-600 animate-pulse">
+                    <p className="text-2xl font-semibold text-blue-600">
                         {hunt.stats?.subdomains || 0}
                     </p>
                     <p className="text-xs text-gray-500">Subdomains</p>
                 </div>
                 <div className="bg-purple-50 rounded p-3">
-                    <p className="text-2xl font-semibold text-purple-600 animate-pulse">
+                    <p className="text-2xl font-semibold text-purple-600">
                         {hunt.stats?.endpoints || 0}
                     </p>
                     <p className="text-xs text-gray-500">Endpoints</p>
                 </div>
                 <div className="bg-red-50 rounded p-3">
-                    <p className="text-2xl font-semibold text-red-600 animate-pulse">
+                    <p className="text-2xl font-semibold text-red-600">
                         {hunt.stats?.vulnerabilities || 0}
                     </p>
                     <p className="text-xs text-gray-500">Findings</p>
