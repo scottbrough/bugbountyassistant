@@ -110,7 +110,7 @@ hunt_queues = {}
 
 class HuntProgress:
     """Track hunt progress for real-time updates"""
-    def __init__(self, hunt_id: str):
+    def __init__(self, hunt_id: str, target: Optional[str] = None):
         self.hunt_id = hunt_id
         self.status = "initializing"
         self.phase = "setup"
@@ -119,7 +119,7 @@ class HuntProgress:
         self.logs = []
         self.start_time = datetime.now()
         self.workspace = None
-        self.target = None
+        self.target = target
         self.subdomains_found = 0
         self.endpoints_found = 0
         self.vulnerabilities_found = 0
@@ -160,7 +160,7 @@ class HuntProgress:
                 'vulnerabilities': self.vulnerabilities_found,
                 'duration': (datetime.now() - self.start_time).total_seconds()
             }
-        }, room=None, broadcast=True)
+        }, namespace='/')
 
 
 # API Routes
@@ -689,15 +689,15 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
                     'phase': phase,
                     'progress': progress_pct,
                     'message': message,
-                    'status': progress.status,
+                    'status': progress.status if progress else 'error',
                     'current_action': message,
                     'stats': {
                         'subdomains': kwargs.get('subdomains', 0),
                         'endpoints': kwargs.get('endpoints', 0),
                         'vulnerabilities': kwargs.get('vulnerabilities', 0),
-                        'duration': (datetime.now() - progress.start_time).total_seconds()
+                        'duration': (datetime.now() - progress.start_time).total_seconds() if progress and hasattr(progress, 'start_time') else 0
                     }
-                }, namespace='/', room=None)
+                }, namespace='/')
                 socketio.sleep(0)  # Allow event to process
         
         # Create a custom log emitter
@@ -708,7 +708,7 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
                     'level': level,
                     'message': message,
                     'timestamp': datetime.now().isoformat()
-                }, namespace='/', room=None)
+                }, namespace='/')
                 socketio.sleep(0)
         
         # Initialize assistant
@@ -734,12 +734,13 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
         # Create assistant with progress callback
         assistant = EnhancedBugBountyAssistantV3(api_key, base_config)
         
-        # Override assistant's logging to emit via Socket.IO
-        original_log = logger.info
-        def socket_log(msg):
-            original_log(msg)
+        def log_with_socket(msg):
+            logger.info(msg)
             emit_log('INFO', msg)
-        logger.info = socket_log
+            
+        hunt_logger = logging.getLogger('hunt')
+        hunt_logger.setLevel(logging.INFO)
+        # We'll use this function directly instead of assigning to logger.info
         
         # Phase 1: Initialization
         emit_progress('initialization', 15, f'Starting hunt on {target}')
@@ -801,7 +802,7 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
                     'vulnerabilities': len(findings),
                     'duration': (datetime.now() - progress.start_time).total_seconds()
                 }
-            }, namespace='/', room=None)
+            }, namespace='/')
         
     except Exception as e:
         progress = active_hunts.get(hunt_id)
@@ -817,7 +818,7 @@ def run_hunt_background(hunt_id: str, target: str, platform: str, program: str, 
                 'hunt_id': hunt_id,
                 'error': str(e),
                 'phase': progress.phase if progress else 'unknown'
-            }, namespace='/', room=None)
+            }, namespace='/')
 
 # Initialize and run
 
@@ -845,7 +846,7 @@ if __name__ == '__main__':
         import eventlet
         import eventlet.wsgi
         logger.info('Running with eventlet for WebSocket support')
-        socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+        socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True, use_reloader=False, log_output=True)
     except ImportError:
         logger.info('Running without eventlet (WebSocket support may be limited)')
-        socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+        socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True, use_reloader=False, log_output=True)
