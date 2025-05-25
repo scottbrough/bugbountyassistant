@@ -1014,36 +1014,86 @@ class EnhancedBugBountyAssistantV3:
             logger.warning("Workspace is not set. Cannot save session.")
 
     def _ai_classify_endpoints(self, endpoints: List[Dict]) -> List[Dict]:
-        """Use AI to classify interesting endpoints"""
+        """Use AI to classify interesting endpoints with batch processing and rate limiting"""
         if not endpoints:
             return []
-        prompt = f"""
-        Analyze these discovered endpoints and identify the most interesting ones for bug bounty hunting:
-        {json.dumps(endpoints[:50], indent=2)}
-        Return the top 10 most interesting endpoints with:
-        - vulnerability types likely to be found
-        - attack vectors to try
-        - priority level (1-10)
-        Focus on admin panels, APIs, file uploads, authentication, etc.
-        """
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.5
-            )
-            content = response.choices[0].message.content if response and response.choices and response.choices[0].message else None
-            if content and isinstance(content, str):
-                try:
-                    result = json.loads(content)
-                    return result.get("interesting_endpoints", [])
-                except Exception:
-                    return endpoints[:10]
+        
+        logger.info(f"Starting batch AI classification for {len(endpoints)} endpoints")
+        
+        max_endpoints = 500
+        if len(endpoints) > max_endpoints:
+            logger.warning(f"Limiting endpoints for classification to {max_endpoints} (from {len(endpoints)})")
+            # Prioritize interesting endpoints
+            interesting = [e for e in endpoints if e.get("interesting", False)]
+            non_interesting = [e for e in endpoints if not e.get("interesting", False)]
+            
+            if len(interesting) > max_endpoints:
+                endpoints = interesting[:max_endpoints]
             else:
-                return endpoints[:10]
-        except Exception as e:
-            logger.error(f"AI endpoint classification failed: {e}")
-            return endpoints[:10]
+                remaining = max_endpoints - len(interesting)
+                endpoints = interesting + non_interesting[:remaining]
+        
+        # Process in smaller batches to avoid token limits
+        batch_size = self.config.get('openai', {}).get('batch_size', 50)  # Default to 50, reduced from 100
+        batches = [endpoints[i:i+batch_size] for i in range(0, len(endpoints), batch_size)]
+        classified_endpoints = []
+        
+        for i, batch in enumerate(batches):
+            logger.info(f"Processing batch {i+1}/{len(batches)} ({len(batch)} endpoints)")
+            try:
+                prompt = f"""
+                Analyze these discovered endpoints and identify the most interesting ones for bug bounty hunting:
+                {json.dumps(batch, indent=2)}
+                
+                For each endpoint, provide:
+                1. interest_level: "high", "medium", or "low"
+                2. potential_vulnerabilities: array of vulnerability types that might be present
+                
+                Focus on endpoints that might expose:
+                - Admin/management interfaces
+                - File upload/download capabilities  
+                - API endpoints with parameters
+                - Authentication mechanisms
+                - Configuration files
+                - Development artifacts
+                
+                Return a JSON object with 'endpoints' array containing the classified endpoints.
+                """
+                
+                response = self.client.chat.completions.create(
+                    model=self.config.get('openai', {}).get('model', "gpt-3.5-turbo"),  # Use 3.5 to reduce token usage
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                    max_tokens=self.config.get('openai', {}).get('max_tokens_per_request', 2000)  # Reduced token limit
+                )
+                
+                content = response.choices[0].message.content if response and response.choices and response.choices[0].message else None
+                if content:
+                    try:
+                        result = json.loads(content)
+                        batch_result = result.get("endpoints", [])
+                        if not batch_result and isinstance(result, list):
+                            batch_result = result
+                        
+                        classified_endpoints.extend(batch_result if batch_result else batch)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse AI response for batch {i+1}, using defaults")
+                        classified_endpoints.extend(batch)
+                else:
+                    classified_endpoints.extend(batch)
+                    
+            except Exception as e:
+                logger.error(f"Error in AI classification for batch {i+1}: {e}")
+                for endpoint in batch:
+                    endpoint["interest_level"] = "medium" if endpoint.get("interesting", False) else "low"
+                    endpoint["potential_vulnerabilities"] = []
+                classified_endpoints.extend(batch)
+            
+            if i < len(batches) - 1:
+                time.sleep(self.config.get('openai', {}).get('rate_limit_delay', 2))
+        
+        logger.info(f"Completed AI classification for {len(classified_endpoints)} endpoints")
+        return classified_endpoints
 
     def _ai_classify_endpoints_revenue_focused(self, endpoints: List[Dict]) -> List[Dict]:
         """Classify endpoints with focus on revenue potential"""
@@ -1201,8 +1251,13 @@ class EnhancedBugBountyAssistantV3:
         return valid_subdomains[:30]
 
     def _discover_content(self, target: str) -> List[Dict]:
+        """Enhanced content discovery with timeout and error handling"""
         import requests
+        import time
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         endpoints = []
+        
         common_paths = [
             '/', '/admin', '/api', '/api/v1', '/api/v2', '/api/v3',
             '/login', '/dashboard', '/config', '/backup', '/test',
@@ -1210,21 +1265,56 @@ class EnhancedBugBountyAssistantV3:
             '/swagger', '/swagger-ui', '/api-docs', '/graphql',
             '/robots.txt', '/sitemap.xml', '/.env', '/.git',
             '/wp-admin', '/phpmyadmin', '/payment', '/checkout',
-            '/user', '/users', '/profile', '/account', '/settings'
+            '/user', '/users', '/profile', '/account', '/settings',
+            '/.gitlab-ci.yml', '/wp-config.php', '/config.php',
+            '/server-status', '/phpinfo.php', '/info.php',
+            '/.svn/entries', '/.DS_Store', '/backup.zip', '/dump.sql'
         ]
-        for path in common_paths:
+        
+        def check_path(path):
             url = f"https://{target}{path}"
             try:
-                response = requests.get(url, timeout=10, verify=False)
-                endpoints.append({
+                response = requests.get(url, timeout=10, verify=False, allow_redirects=True)
+                # Enhanced interestingness detection
+                interesting = False
+                interesting_reason = "Default"
+                
+                if response.status_code in (200, 201, 202, 203, 204):
+                    interesting = True
+                    interesting_reason = f"Accessible endpoint: {response.status_code}"
+                elif response.status_code in (401, 403):
+                    interesting = True
+                    interesting_reason = f"Protected resource: {response.status_code}"
+                elif any(keyword in path.lower() for keyword in ['.env', '.git', 'admin', 'config', 'backup', 'api']):
+                    interesting = True
+                    interesting_reason = f"Sensitive path detected: {path}"
+                
+                return {
                     "url": url,
                     "status": response.status_code,
                     "length": len(response.content),
                     "title": self._extract_title(response.text),
-                    "headers": dict(response.headers)
-                })
+                    "headers": dict(response.headers),
+                    "interesting": interesting,
+                    "interesting_reason": interesting_reason,
+                    "content_type": response.headers.get("Content-Type", "")
+                }
             except Exception as e:
                 logger.debug(f"Failed to fetch {url}: {e}")
+                return None
+        
+        max_workers = 5  # Limit concurrent requests
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_path = {executor.submit(check_path, path): path for path in common_paths}
+            
+            for future in as_completed(future_to_path):
+                result = future.result()
+                if result:
+                    endpoints.append(result)
+                
+                time.sleep(0.1)
+        
+        logger.info(f"Content discovery completed for {target}: {len(endpoints)} endpoints found")
         return endpoints
     
     def _extract_title(self, html: str) -> str:
