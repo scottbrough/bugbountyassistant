@@ -1,0 +1,31 @@
+src/
+├── services/
+│   ├── __init__.py
+│   ├── hunt_orchestrator.py      # HuntManager & HuntExecutor
+│   ├── llm_service.py           # AI/LLM abstraction layer
+│   ├── verification_service.py  # False positive verification
+│   └── report_generator.py      # Report generation service
+│
+├── modules/
+│   ├── __init__.py
+│   ├── xss_module.py
+│   ├── sqli_module.py
+│   ├── ssrf_module.py
+│   ├── idor_module.py
+│   └── base_module.py           # Common interface
+│
+├── utils/
+│   ├── __init__.py
+│   ├── http_client.py           # Centralized HTTP handling
+│   ├── cache_manager.py         # Caching layer
+│   └── rate_limiter.py          # Rate limiting
+│
+├── models/
+│   ├── __init__.py
+│   ├── finding.py               # Finding data model
+│   ├── hunt.py                  # Hunt data model
+│   └── program.py               # Program data model
+│
+└── config/
+    ├── __init__.py
+    └── settings.py              # Configuration management
