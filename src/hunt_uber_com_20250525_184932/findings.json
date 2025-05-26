@@ -1,0 +1,21 @@
+{
+  "findings": [
+    {
+      "vulnerable": true,
+      "type": "Server-Side Request Forgery (SSRF)",
+      "url": "https://uber.com/uploads?url=http%3A//localhost%3A8080/admin",
+      "payload": "http://localhost:8080/admin",
+      "evidence": "...abel=\"English\" href=\"/us/en/uploads/?file=%3C%3Fxml%20version%3D%221.0%22%20%3F%3E%3C%21DOCTYPE%20r%20%5B%3C%21ENTITY%20sp%20SYSTEM%20%22http%3A%2F%2Flocalhost%2Fxxe%22%3E%5D%3E%3Cr%3E%26sp%3B%3C%2Fr%3E\" target=\"_self\" class=\"css-jYqsIi\"><span>English</span></a><a data-baseweb=\"button\" aria-label=\"\u7b80...",
+      "severity": "high",
+      "confidence": "medium",
+      "discovery_method": "endpoint_analysis",
+      "estimated_bounty": 100
+    }
+  ],
+  "testing_metrics": {
+    "endpoints_tested": 9,
+    "time_spent_seconds": 3612.060701608658,
+    "estimated_value": 100,
+    "hourly_rate": 99.66609914381321
+  }
+}

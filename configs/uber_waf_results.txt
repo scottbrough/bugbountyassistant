@@ -1,0 +1,17 @@
+{
+  "vulnerable": false,
+  "waf_detected": true,
+  "waf_type": "cloudflare",
+  "evasion_attempted": true,
+  "techniques_tried": [
+    "encoding",
+    "case_variation",
+    "comment_insertion",
+    "whitespace_manipulation",
+    "parameter_pollution",
+    "header_manipulation",
+    "url_encoding",
+    "ip_obfuscation",
+    "protocol_confusion"
+  ]
+}

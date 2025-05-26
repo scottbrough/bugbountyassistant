@@ -491,6 +491,11 @@ class EnhancedBugBountyAssistant:
     
     def ai_report_generation(self) -> Dict:
         """Enhanced AI-powered professional report generation with platform formatting"""
+        # Ensure self.workspace is a Path object
+        from pathlib import Path
+        if self.workspace and not isinstance(self.workspace, Path):
+            self.workspace = Path(self.workspace)
+        
         logger.info("📝 Generating enhanced professional report...")
         report_files = {}
         # Platform-specific report

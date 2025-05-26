@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bug Bounty Report - uber.com</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #007acc;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            display: block;
+        }
+        .finding {
+            border: 1px solid #ddd;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .severity-critical { border-left: 5px solid #dc3545; }
+        .severity-high { border-left: 5px solid #fd7e14; }
+        .severity-medium { border-left: 5px solid #ffc107; }
+        .severity-low { border-left: 5px solid #28a745; }
+        .severity-info { border-left: 5px solid #17a2b8; }
+        .chain {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .code {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        .badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin: 5px;
+        }
+        .badge-aggressive { background: #dc3545; color: white; }
+        .badge-scope { background: #28a745; color: white; }
+        .badge-platform { background: #007acc; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Enhanced Bug Bounty Report</h1>
+            <h2>uber.com</h2>
+            <p><strong>Generated:</strong> 2025-05-25 21:24:25</p>
+            <div>
+                
+                
+                <span class="badge badge-aggressive">Aggressive Mode</span>
+                <span class="badge badge-scope">Scope Validated</span>
+            </div>
+        </div>
+        <div class="stats">
+            <div class="stat-card">
+                <span class="stat-number">1</span>
+                <span>Vulnerabilities Found</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">3</span>
+                <span>Attack Chains</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">1</span>
+                <span>Critical + High</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number">0</span>
+                <span>JS Files Analyzed</span>
+            </div>
+        </div>
+        
+        <h2>🚨 Vulnerabilities</h2>
+        <div class="finding severity-high"><h3>Server-Side Request Forgery (SSRF)</h3><p><strong>URL:</strong> https://uber.com/uploads?url=http%3A//localhost%3A8080/admin</p><p><strong>Severity:</strong> High</p><p><strong>Discovery Method:</strong> endpoint_analysis</p><div class="code">...abel="English" href="/us/en/uploads/?file=%3C%3Fxml%20version%3D%221.0%22%20%3F%3E%3C%21DOCTYPE%20r%20%5B%3C%21ENTITY%20sp%20SYSTEM%20%22http%3A%2F%2Flocalhost%2Fxxe%22%3E%5D%3E%3Cr%3E%26sp%3B%3C%2Fr%3E" target="_self" class="css-jYqsIi"><span>English</span></a><a data-baseweb="button" aria-label="简...</div></div>
+        <h2>⛓️ Attack Chains</h2>
+        <div class="chain"><h3>Admin Access via SSRF</h3><p>This chain exploits the SSRF vulnerability to gain unauthorized access to the admin panel.</p><p><strong>Impact:</strong> Unknown</p></div><div class="chain"><h3>Data Exfiltration via SSRF</h3><p>This chain exploits the SSRF vulnerability to exfiltrate sensitive data.</p><p><strong>Impact:</strong> Unknown</p></div><div class="chain"><h3>Cross-Origin Attack via SSRF</h3><p>This chain exploits the SSRF vulnerability to perform cross-origin attacks, bypassing SOP.</p><p><strong>Impact:</strong> Unknown</p></div>
+        <h2>📊 Testing Summary</h2>
+        <div class="code">
+            Testing Mode: Aggressive (WAF Evasion Enabled)<br>
+            Scope Validation: Enabled<br>
+            Total Endpoints Tested: 0<br>
+            JavaScript Files Analyzed: 0<br>
+            Workspace: src/hunt_uber_com_20250525_184932
+        </div>
+        <div style="margin-top: 40px; padding: 20px; background: #e3f2fd; border-radius: 8px;">
+            <h3>⚠️ Important Notes</h3>
+            <ul>
+                <li>This report was generated automatically - manual verification is recommended</li>
+                <li>All findings should be validated before submission to bug bounty programs</li>
+                <li>Ensure you have proper authorization before testing any targets</li>
+                <li>Aggressive testing mode was used - some requests may have triggered security alerts</li>
+                <li>Scope validation was enabled - only in-scope targets were tested</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

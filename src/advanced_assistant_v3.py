@@ -28,6 +28,8 @@ from js_analysis_module import JavaScriptAnalyzer
 from revenue_maximizer import RevenueMaximizer, CollaborationManager, AutoSubmitter
 from continuous_monitor import ContinuousMonitor, ProgramWatcher
 from api_testing_module import APITester
+from enhanced_vuln_detection_v2 import ModernVulnerabilityDetector, UberSpecificDetector
+from mobile_app_tester import MobileAppTester
 
 # Configure logging
 logging.basicConfig(
@@ -62,6 +64,10 @@ class EnhancedBugBountyAssistantV3:
         self.aggressive_tester = WAFEvasionTester(self.config)
         self.js_analyzer = JavaScriptAnalyzer(self.client)
         self.api_tester = APITester(self.config)
+        # Initialize modern/uber/mobile detectors
+        self.modern_detector = ModernVulnerabilityDetector()
+        self.uber_detector = UberSpecificDetector()
+        self.mobile_tester = MobileAppTester()
         
         # Initialize revenue maximization modules
         self.revenue_maximizer = RevenueMaximizer()
@@ -85,6 +91,9 @@ class EnhancedBugBountyAssistantV3:
         
         logger.info("🚀 Enhanced Bug Bounty Assistant v3.0 initialized")
         logger.info("💰 Revenue maximization features enabled")
+        
+        # Call token management patch
+        self._patch_token_management()
         
     def initialize_hunt(self, target: str, platform: str = '', program_handle: str = ''):
         """Initialize enhanced hunt with FIXED scope validation"""
@@ -1342,3 +1351,23 @@ class EnhancedBugBountyAssistantV3:
     def _handle_monitoring_notification(self, notification: Any):
         """Handle notifications from continuous monitoring (stub for now)"""
         logger.info(f"[Monitor Notification] {notification}")
+
+# Token management patch
+import sys
+sys.path.append('.')
+from fix_openai_token_limits import OpenAITokenManager, EnhancedOpenAIHandler, create_patched_ai_classify_endpoints
+
+# Apply patch on initialization
+def _patch_token_management(self):
+    """Apply token management patches"""
+    self.token_manager = OpenAITokenManager(model="gpt-3.5-turbo", max_tokens=2000)
+    self.openai_handler = EnhancedOpenAIHandler(self.client, self.token_manager)
+    
+    # Replace the method
+    self._ai_classify_endpoints = create_patched_ai_classify_endpoints(
+        self.token_manager, 
+        self.openai_handler
+    ).__get__(self, EnhancedBugBountyAssistantV3)
+
+# Call this in __init__
+EnhancedBugBountyAssistantV3._patch_token_management = _patch_token_management

