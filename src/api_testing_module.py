@@ -1171,10 +1171,141 @@ class APITester:
     
     # Add stubs for missing methods
     def _test_api_key_vulnerabilities(self, base_url: str) -> List[Dict]:
-        # TODO: Implement real API key vulnerability tests
-        return []
+        """Test for weaknesses in API key authentication"""
+        findings = []
+
+        # Endpoints that typically require an API key
+        protected_endpoints = [
+            '/api/admin', '/admin', '/api/v1/admin', '/api/v1/users', '/api/users'
+        ]
+
+        # Common API key header and parameter names
+        api_key_headers = [
+            'X-API-Key', 'X-Api-Key', 'Api-Key', 'apikey', 'api_key'
+        ]
+        api_key_params = [
+            'api_key', 'apikey', 'key', 'access_key', 'token'
+        ]
+
+        # Dummy API keys to test with
+        test_keys = ['invalid123', 'testkey', 'abcdef']
+
+        for endpoint in protected_endpoints:
+            url = f"{base_url}{endpoint}"
+
+            # Skip endpoints that are not protected
+            try:
+                resp = self.session.get(url, timeout=5, verify=False)
+                if resp.status_code not in [401, 403]:
+                    continue
+            except Exception:
+                continue
+
+            for key in test_keys:
+                # Try header-based API key
+                for header in api_key_headers:
+                    try:
+                        response = self.session.get(
+                            url,
+                            headers={header: key},
+                            timeout=10,
+                            verify=False
+                        )
+                        if response.status_code in [200, 201]:
+                            findings.append({
+                                'vulnerable': True,
+                                'type': 'API Key Authentication Bypass',
+                                'url': url,
+                                'severity': 'high',
+                                'header': header,
+                                'api_key': key,
+                                'evidence': 'Endpoint accessible with arbitrary API key'
+                            })
+                            break
+                    except Exception as e:
+                        logger.debug(f"API key header test failed: {e}")
+
+                # Try query parameter API key
+                for param in api_key_params:
+                    test_url = url + ('&' if '?' in url else '?') + f"{param}={key}"
+                    try:
+                        response = self.session.get(test_url, timeout=10, verify=False)
+                        if response.status_code in [200, 201]:
+                            findings.append({
+                                'vulnerable': True,
+                                'type': 'API Key Authentication Bypass',
+                                'url': test_url,
+                                'severity': 'high',
+                                'parameter': param,
+                                'api_key': key,
+                                'evidence': 'Endpoint accessible with arbitrary API key'
+                            })
+                            break
+                    except Exception as e:
+                        logger.debug(f"API key param test failed: {e}")
+
+        return findings
+
     def _test_bearer_token_vulnerabilities(self, base_url: str) -> List[Dict]:
-        # TODO: Implement real bearer token vulnerability tests
-        return []
+        """Test for bearer token authentication weaknesses"""
+        findings = []
+
+        protected_endpoints = [
+            '/api/user', '/api/profile', '/api/account',
+            '/api/v1/user', '/api/v1/me', '/api/v1/profile'
+        ]
+
+        # Tokens to test - include an expired JWT if possible
+        test_tokens = ['invalidtoken123456']
+        expired = self._create_expired_jwt()
+        if expired and expired.get('token'):
+            test_tokens.append(expired['token'])
+
+        for endpoint in protected_endpoints:
+            url = f"{base_url}{endpoint}"
+
+            # Ensure the endpoint requires authentication
+            try:
+                resp = self.session.get(url, timeout=5, verify=False)
+                if resp.status_code not in [401, 403]:
+                    continue
+            except Exception:
+                continue
+
+            for token in test_tokens:
+                try:
+                    response = self.session.get(
+                        url,
+                        headers={'Authorization': f'Bearer {token}'},
+                        timeout=10,
+                        verify=False
+                    )
+
+                    if response.status_code in [200, 201]:
+                        findings.append({
+                            'vulnerable': True,
+                            'type': 'Bearer Token Authentication Bypass',
+                            'url': url,
+                            'severity': 'high',
+                            'token': token[:20] + '...' if len(token) > 20 else token,
+                            'evidence': 'Endpoint accessible with invalid bearer token'
+                        })
+                        break
+
+                    # Look for leaked tokens in the response
+                    if 'eyj' in response.text.lower() and 'token' in response.text.lower():
+                        findings.append({
+                            'vulnerable': True,
+                            'type': 'Bearer Token Exposure',
+                            'url': url,
+                            'severity': 'medium',
+                            'evidence': 'Potential token found in response body'
+                        })
+                        break
+
+                except Exception as e:
+                    logger.debug(f"Bearer token test failed: {e}")
+
+        return findings
     
 
