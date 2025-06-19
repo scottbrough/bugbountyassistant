@@ -175,11 +175,17 @@ Output format: {"endpoints": [...]}"""
                 
                 # Use async handler if available, otherwise sync
                 import asyncio
-                if asyncio.get_event_loop().is_running():
-                    content = asyncio.create_task(handler.make_request_with_retry(messages, temperature=0.3)).result()
-                else:
-                    # Sync version
-                    content = handler.make_request_with_retry(messages, temperature=0.3)
+                try:
+                    # Prefer running within any existing event loop
+                    loop = asyncio.get_running_loop()
+                    content = loop.run_until_complete(
+                        handler.make_request_with_retry(messages, temperature=0.3)
+                    )
+                except RuntimeError:
+                    # No running loop - run the coroutine synchronously
+                    content = asyncio.run(
+                        handler.make_request_with_retry(messages, temperature=0.3)
+                    )
                 
                 if content:
                     try:
